@@ -1,37 +1,74 @@
 from bs4 import BeautifulSoup
 import requests
 
-
-# Standard headers to fetch a website
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
 }
 
-
 def fetch_website_contents(url):
-    """
-    Return the title and contents of the website at the given url;
-    truncate to 2,000 characters as a sensible limit
-    """
-    response = requests.get(url, headers=headers)
-    soup = BeautifulSoup(response.content, "html.parser")
-    title = soup.title.string if soup.title else "No title found"
-    if soup.body:
-        for irrelevant in soup.body(["script", "style", "img", "input"]):
-            irrelevant.decompose()
-        text = soup.body.get_text(separator="\n", strip=True)
-    else:
-        text = ""
-    return (title + "\n\n" + text)[:2_000]
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+
+        if response.status_code != 200:
+            return f"Could not fetch {url}"
+
+        soup = BeautifulSoup(response.content, "html.parser")
+
+        title = soup.title.string if soup.title else "No title found"
+
+        text = soup.get_text(separator=" ", strip=True)
+
+        return f"""
+URL: {url}
+
+TITLE:
+{title}
+
+CONTENT:
+{text[:2000]}
+"""
+
+    except Exception as e:
+        print(f"Failed to fetch content from {url}")
+        print(e)
+
+        return ""
 
 
 def fetch_website_links(url):
     """
-    Return the links on the webiste at the given url
-    I realize this is inefficient as we're parsing twice! This is to keep the code in the lab simple.
-    Feel free to use a class and optimize it!
+    Return the links on the website at the given url
     """
-    response = requests.get(url, headers=headers)
-    soup = BeautifulSoup(response.content, "html.parser")
-    links = [link.get("href") for link in soup.find_all("a")]
-    return [link for link in links if link]
+
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+
+        if response.status_code != 200:
+            return []
+
+        soup = BeautifulSoup(response.content, "html.parser")
+
+        links = [link.get("href") for link in soup.find_all("a")]
+
+        return [link for link in links if link]
+
+    except Exception as e:
+        print(f"Failed to fetch links from {url}")
+        print(e)
+
+        return []
+
+def fetch_page_and_all_relevant_links(url):
+    result = fetch_website_contents(url)
+
+    links = fetch_website_links(url)
+
+    for link in links[:5]:
+        if link.startswith("/"):
+            link = url.rstrip("/") + link
+
+        if link.startswith("http"):
+            result += "\n\n"
+            result += fetch_website_contents(link)
+
+    return result
